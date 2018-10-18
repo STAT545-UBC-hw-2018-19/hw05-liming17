@@ -1,0 +1,303 @@
+---
+title: "hw05_gapminder"
+output: html_document
+always_allow_html: yes
+author: "Liming Liu"
+date: '2018-10-12'
+---
+#### First import the library
+```{r}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(forcats))
+library(gapminder)
+library(kableExtra)
+library(knitr)
+library(ggplot2)
+library(plotly)
+```
+
+# Part 1: Factor management
+
+## Elaboration for the gapminder data set
+
+#### 1.Drop Oceania
+
+First, filter the Gapminder data to remove observations associated with the continent of Oceania.
+
+```{r}
+noOceania <- gapminder %>% 
+  filter(continent != "Oceania")
+```
+
+Then remove unused factor levels.
+
+```{r}
+dropOceania <- noOceania %>% 
+  droplevels()
+```
+
+Let's see what their difference in the number of rows and levels:
+
+```{r}
+tibble1 <- tibble(name = c("gapminder", "noOceania", "dropOceania"), num_of_level = c(nlevels(gapminder$continent),nlevels(noOceania$continent),nlevels(dropOceania$continent)), num_of_row = c(nrow(gapminder), nrow(noOceania), nrow(dropOceania)))
+knitr::kable(tibble1) %>% 
+  kable_styling(bootstrap_options = "bordered",latex_options = "basic",full_width = F)
+```
+
+We can see from the tibble above that after filtering the Oceania from gapminder, the number of level in continent doesn't change, only the number of rows gets smaller. After dropping the unused level, the number of level changes to 4, and the number of rows also falls down to 1680.
+
+Then let's check the level of each data set:
+```{r}
+levels(gapminder$continent)
+```
+
+```{r}
+levels(noOceania$continent)
+```
+
+```{r}
+levels(dropOceania$continent)
+```
+
+So with droplevels( ) the Oceania level is dropped.
+
+#### 2.Reorder the levels of country or continent
+
+##### 2.1 reorder by fct_reorder()
+
+Let's order the continent factor by the largest lifeExp in a descending order:
+
+```{r}
+reOrder <- gapminder %>% 
+  group_by(continent) %>% 
+  summarise(maxLifeExp = max(lifeExp)) %>% 
+  mutate(continent = fct_reorder(continent, maxLifeExp, max, .desc = TRUE))
+levels(reOrder$continent)
+```
+
+Let's check the order by using arrange( ):
+
+```{r}
+arran <- gapminder %>% 
+  group_by(continent) %>% 
+  summarise(largest_lifeExp = max(lifeExp)) %>% 
+  arrange(desc(largest_lifeExp)) 
+  knitr::kable(arran) %>% 
+  kable_styling(bootstrap_options = "bordered",latex_options = "basic",full_width = F)
+```
+
+We can see it's the same order as the result above.
+
+##### 2.2 compare arrange() and fct_reorder()
+
+Let's see the order of level in reOrder and arran:
+
+```{r}
+levels(reOrder$continent)  #order of factor after using fct_reorder()
+```
+
+```{r}
+levels(arran$continent) #order of factor after using arrange()
+```
+
+In reOrder, with the using of fct_reorder( ), the order of levels changes into the expected order: a descending max lifeExp. In arran, with the using of arrange( ), the order of levels doesn't change.
+
+##### 2.3 The effects of fct_reorder() and arrange() on the figure
+
+We have seen the effect of fct_reorder( ) and arrange( ) on the orderof level, now let's see the effect on the figure. First, plot the max lifeExp in each Asian countries with fct_reorder( ):
+```{r}
+gapAsia <- gapminder %>% 
+  filter(continent == "Asia") %>% 
+  group_by(country) %>% 
+  summarise(maxLifeExp = max(lifeExp))
+gapAsia %>% 
+  ggplot(aes(maxLifeExp, fct_reorder(country, maxLifeExp))) + geom_point(aes(color = country)) + xlab("Max LifeExp") + ylab("country") + ggtitle("Max LifeExp in Asian Countries")
+```
+
+We can see the order of country has changed in the figure. Then let's use arrange( ):
+
+```{r}
+gapAsia %>% 
+  arrange(maxLifeExp) %>% 
+  ggplot(aes(maxLifeExp, country)) + geom_point(aes(color = country)) + xlab("Max LifeExp") + ylab("country") + ggtitle("Max LifeExp in Asian Countries")
+```
+
+This time the order of country doesn't change because the arrange( ) can't change the order of level in country.  Then let's use arrange( ) and fct_reorder( ) :
+
+```{r}
+gapAsia %>% 
+  arrange(maxLifeExp) %>% 
+  ggplot(aes(maxLifeExp, fct_reorder(country, maxLifeExp))) + geom_point(aes(color = country)) + xlab("Max LifeExp") + ylab("country") + ggtitle("Max LifeExp in Asian Countries")
+```
+
+The order of country has changed. So if we use fct_reorder( ), or combine with arrange( ), the order of level will change in the figure. However, if we only use arrange( ), the order of level in the figure will not change.
+
+
+
+# Part 2: File I/O
+
+First, create a new data frame, by filtering the Asian country with their max lifeExp more than 75 years old:
+
+```{r}
+df <- gapminder %>% 
+  filter(continent == "Asia" & lifeExp > 75) %>% 
+  group_by(country) %>% 
+  summarise(maxLifeExp = max(lifeExp))
+ knitr::kable(df) %>% 
+  kable_styling(bootstrap_options = "bordered",latex_options = "basic",full_width = F)
+```
+
+Then, write/read the dataframe into/from a file:
+
+#### 1.write_csv()/read_csv()
+
+```{r}
+write_csv(df,"df.csv")
+readDf <- read_csv("df.csv")
+readDf
+```
+
+We can see the after using write_csv( )/read_csv( ) country change from factor to character
+
+#### 2.saveRDS()/readRDS()
+
+saveRDS can save a single object to the file:
+
+```{r}
+saveRDS(df,"df.rds")
+readRds <- readRDS("df.rds")
+readRds
+```
+
+We can see the after using saveRDS( )/readRDS( ) country is still a factor
+
+#### 3.dput()/dget()
+
+dput( ) writes an ASCII text representation of an R object to a file or connection, or uses one to recreate the object.
+
+```{r}
+dput(df,"df.R")
+readDput <- dget("df.R")
+readDput
+```
+
+So atfer using dput( )/dget( ), country is still a factor
+
+# Part 3: Visualization design
+
+#### 1.remake the figure
+
+Let's first look at a previous plot which show the histograms of `lifeExp` for each continent:
+
+```{r}
+ggplot(gapminder, aes(lifeExp)) + facet_wrap( ~ continent, scales = "free_x") + geom_histogram()
+```
+
+So we can see the first thing needed to be improved is that the histogram can only give us distribution information on lifeExp, so let's change to a point plot to show the trend of lifeExp from year 1950s to 1990s:
+
+```{r}
+# filter the data
+newGap <- gapminder %>% 
+  filter(year >= 1950 & year <= 1999)
+# make y scale free, change the color to a colour-blind friendly scheme, change the breaks
+(point <- newGap %>% 
+  ggplot(aes(year, lifeExp)) + facet_wrap( ~ continent, scales = "free_y") + geom_point(aes(color = lifeExp),alpha = 0.3) + labs(title = "lifeExp for 5 continent from 1950s~1990s") +  scale_color_viridis_c(trans="log10",breaks  = 10*(1:8)))
+```
+
+change a theme:
+
+```{r}
+(point_new <- point + theme_minimal())
+```
+
+Differnces: we can see a rough trend and distributions for the lifeExp in each continent in the new plot. Also the color is changing according to the lifeExp so it becomes easier to see which continent has a highier lifeExp in a free-y-scale facet plot. In order to make the plot seems simpler, the theme change to minimal by using  theme_minimal( )
+
+But if we want to look at the accurate distribution of each year, we can use box plot:
+
+```{r}
+(box_plot <- newGap %>% 
+  ggplot(aes(year, lifeExp)) + facet_wrap( ~ continent, scales = "free_y") + geom_boxplot(fill = "blue",color = "orange",outlier.color = "blue", alpha = 0.3, aes(group = year)) + theme_minimal() + labs(title = "lifeExp for 5 continent from 1950s~1990s"))
+```
+
+Differnces: through a box plot, we can clearly see the  minimum, first quartile, median, third quartile, maximum, as well as the trend during the years. However, we still can't see the accurate data on the plot, so we need to convert to plotly.
+
+#### 2.convert to plotly
+
+For the first point plot, convert ggplot to plotly by 'ggplotly()':
+
+```{r}
+ggplotly(point_new)
+```
+
+For the second box plot, convert ggplot to plotly by 'ggplotly()':
+
+```{r}
+ggplotly(box_plot)
+```
+
+
+Unlike ggplot, plotly makes interactive, publication-quality graphs online. Readers can interact with the plot in various ways through teh tool bar above the plot. Also the data value will be shown in the window when the pointer move to the the data.
+
+Then, let's try plot_ly( ) to make a 3D plot:
+
+```{r}
+newGap %>% 
+  plot_ly(x = ~year,
+          y = ~continent,
+          z = ~lifeExp,
+          type = "scatter3d",
+          mode = "markers",
+          marker = list(size = 3.5, color = ~lifeExp, colorscale = 'Viridis'),
+          opacity = 0.3)
+```
+
+In the 3D plot, we can combine the data in 5 continent into onr plot, also by changing the view coordinate, we can also check the data in a single continent
+
+# Part 4: Writing figures to file
+
+Use ggsave( ) to explicitly save a plot to file. ggsave( ) is a convenient function for saving the last plot that displayed. So let's first plot a graph:
+
+```{r}
+(save_plot <- gapminder %>% 
+  ggplot(aes(continent, gdpPercap)) + scale_y_log10() + geom_boxplot(aes(fill = continent),alpha = 0.5))
+```
+
+Then, since the ggsave( ) guesses the type of graphics device from the extension. This means the only argument you need to supply is the filename, but in order to play around with various options in ggsave( ), I will use .png format:
+
+```{r}
+ggsave("save_plot_1.png")
+```
+
+Then try changing the width and height of the saving image:
+
+```{r}
+ggsave("width8_height6.png", width = 8, height = 6)
+```
+
+change the resolution of the saving image:
+
+```{r}
+ggsave("dpi_72.png", dpi = 72)
+```
+
+change the scale of the image:
+
+```{r}
+ggsave("scale_0.6.png", scale = 0.6)
+```
+
+try writing the image to a vector format pdf:
+
+```{r}
+ggsave("vector_image.pdf")
+```
+
+Although the ggsave( ) will save the last plot that displayed, when we want to save other previous image, we need to specify the image we want to save. For example, if we want to save the box_plot:
+
+```{r}
+ggsave("box_plot.png", plot = box_plot)
+```
+
+After adding the plot name in ggsave, we can save the image we want.
+
+
